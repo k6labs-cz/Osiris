@@ -1,0 +1,33 @@
+@page "/"
+@inject Workspaces Workspaces
+@inject UiOptions Options
+@inject NavigationManager Nav
+
+<main class="page">
+    <div class="page-head">
+        <Typography Variant="TextVariant.Title" Class="grow">Osiris</Typography>
+        <ThemeToggle />
+        @if (Options.SignOutPath is { } signOut) { <Button Variant="ButtonVariant.Ghost" Icon="log-out" Href="@signOut">Sign out</Button> }
+    </div>
+    @if (ids.Count == 0)
+    {
+        <Alert Severity="AlertSeverity.Neutral">You have no workspaces here. Ask an administrator for access.</Alert>
+    }
+    @foreach (var id in ids)
+    {
+        <a class="workspace" href="w/@Uri.EscapeDataString(id)">@id</a>
+    }
+</main>
+
+@code {
+    [CascadingParameter] public required Task<AuthenticationState> Auth { get; set; }
+
+    List<string> ids = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        ids = Workspaces.List((await Auth).User).ToList();
+        // A single-user app has exactly one workspace: go straight to it.
+        if (!Workspaces.Many && ids is [var only]) Nav.NavigateTo($"w/{Uri.EscapeDataString(only)}", replace: true);
+    }
+}

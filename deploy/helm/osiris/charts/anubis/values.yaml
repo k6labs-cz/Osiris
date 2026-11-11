@@ -1,0 +1,114 @@
+# Anubis keeps its state in SQLite, so the chart always runs exactly ONE replica with the
+# "Recreate" strategy (two pods must never open the same database file).
+
+image:
+  repository: ghcr.io/k6labs-cz/anubis
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Non-secret configuration in the appsettings.json format; mounted as /config/appsettings.json
+# (Anubis:ConfigFile) and reloaded on change. Secrets go to `secrets`, never here.
+# When Anubis.Issuer is empty and the ingress is enabled, it is set to https://<first ingress host>.
+config:
+  Anubis:
+    Issuer: ""
+    AdminEmail: admin@example.com
+    General:
+      ServerName: Anubis
+  # Email:
+  #   Provider: Smtp
+  #   FromAddress: id@example.com
+  #   FromName: Example ID
+  #   Smtp: { Host: smtp.example.com, Port: 587, Username: id@example.com }
+
+# Secret configuration, mounted as /run/secrets/anubis (Anubis:SecretsDirectory): one file per key,
+# "__" separates sections, e.g. Email__Smtp__Password sets Email:Smtp:Password.
+secrets:
+  # Use an existing Secret (External Secrets, Sealed Secrets, ...) instead of creating one.
+  existingSecret: ""
+  # Without an admin password no admin account is created and the first user who registers
+  # becomes the administrator. The chart therefore generates one (kept across upgrades)
+  # unless values.Anubis__AdminPassword is set.
+  generateAdminPassword: true
+  # Keys of the Secret created by the chart (when existingSecret is empty).
+  values: {}
+  #   Anubis__AdminPassword: change-me-please-123
+  #   Email__Smtp__Password: smtp-password
+
+# Data directory (/data): SQLite database, settings saved from the admin UI,
+# Data Protection keys and OpenIddict certificates.
+persistence:
+  enabled: true
+  existingClaim: ""
+  # Block storage (ReadWriteOnce); SQLite file locking is not reliable on NFS-like volumes.
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+# TLS ends at the ingress; Anubis trusts its X-Forwarded-* headers
+# (the image sets ASPNETCORE_FORWARDEDHEADERS_ENABLED=true), so expose the pod only through it.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  #   cert-manager.io/cluster-issuer: letsencrypt
+  hosts:
+    - id.example.com
+  tls: []
+  #   - secretName: anubis-tls
+  #     hosts: [id.example.com]
+
+# Extra environment variables, e.g. OpenTelemetry:
+#   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+#     value: http://otel-collector.observability:4317
+extraEnv: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi   # Argon2id uses 64 MiB per password check
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654   # "app" user of the .NET images
+  runAsGroup: 1654
+  fsGroup: 1654     # makes the volume writable for that user
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+startupProbe:
+  httpGet: { path: /healthz, port: http }
+  periodSeconds: 5
+  failureThreshold: 30   # first start: migrations + key generation
+readinessProbe:
+  httpGet: { path: /healthz, port: http }
+  periodSeconds: 10
+livenessProbe:
+  httpGet: { path: /healthz, port: http }
+  periodSeconds: 30
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

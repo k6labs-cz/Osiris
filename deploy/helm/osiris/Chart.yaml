@@ -1,0 +1,22 @@
+apiVersion: v2
+name: osiris
+description: Osiris — an AI agent server with many workspaces and users, signed in with Anubis (included).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/k6labs-cz/Osiris
+sources:
+  - https://github.com/k6labs-cz/Osiris
+license: MIT
+keywords:
+  - ai
+  - agent
+  - llm
+  - mcp
+dependencies:
+  # Anubis, the identity provider Osiris signs users in with. Its chart is kept in charts/anubis
+  # (a copy of https://github.com/k6labs-cz/Anubis/tree/main/deploy/helm/anubis, refreshed by
+  # deploy/helm/update-anubis.sh). Turn it off (anubis.enabled=false) to use an Anubis you run elsewhere.
+  - name: anubis
+    version: "0.1.0"
+    condition: anubis.enabled

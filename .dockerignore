@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+artifacts/
+.git/
+.github/
+.vs/
+.vscode/
+.devcontainer/
+tests/
+deploy/
+packaging/
+docs/
+# Local state and secrets never go into the image
+.env
+data/
+**/.osiris/

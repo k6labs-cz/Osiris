@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <!-- A real MCP server in the test process. -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Osiris.Core\Osiris.Core.csproj" />
+    <ProjectReference Include="..\..\src\Osiris.Tools.Database\Osiris.Tools.Database.csproj" />
+    <ProjectReference Include="..\..\src\Osiris.Ui\Osiris.Ui.csproj" />
+    <ProjectReference Include="..\..\src\Osiris.Web\Osiris.Web.csproj" />
+  </ItemGroup>
+
+  <!-- A real package feed for the tests: the database tools packed as the NuGet package a workspace would reference. -->
+  <Target Name="PackTestFeed" AfterTargets="Build">
+    <MSBuild Projects="..\..\src\Osiris.Tools.Database\Osiris.Tools.Database.csproj" Targets="Pack" Properties="PackageOutputPath=$(OutDir)feed/;NoBuild=true" />
+  </Target>
+
+</Project>

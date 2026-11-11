@@ -1,0 +1,21 @@
+@* Osiris' look: cyan and magenta over Hathor's themes. Change colors here only. *@
+<Hathor IconSet="LucideIconSet.Instance" Mode="Mode" Primary="#0891b2" Secondary="#c026d3" Class="osiris">
+    <CascadingValue Value="this" IsFixed="true">
+        <Router AppAssembly="typeof(Routes).Assembly">
+            <Found Context="routeData">
+                <RouteView RouteData="routeData" />
+            </Found>
+        </Router>
+    </CascadingValue>
+</Hathor>
+
+@code {
+    /// <summary>The theme of the whole app; starts as the system prefers, <see cref="ThemeToggle"/> changes it.</summary>
+    public ThemeMode Mode { get; private set; } = ThemeMode.System;
+
+    public void SetMode(ThemeMode mode)
+    {
+        Mode = mode;
+        StateHasChanged();
+    }
+}

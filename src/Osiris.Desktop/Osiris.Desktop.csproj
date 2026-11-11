@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The desktop app: the web UI served to a window of its own, for one user and one workspace. -->
+  <PropertyGroup>
+    <!-- Exe, not WinExe: the SDK adds the Blazor script (blazor.web.js) only to an Exe. On Windows the app is
+         still made a window app (no console) by the property the SDK derives from WinExe. -->
+    <OutputType>Exe</OutputType>
+    <_UseWindowsGraphicalUserInterface Condition="$(RuntimeIdentifier.StartsWith('win'))">true</_UseWindowsGraphicalUserInterface>
+    <AssemblyName>osiris-desktop</AssemblyName>
+    <RootNamespace>Osiris.Desktop</RootNamespace>
+    <!-- The components live in Osiris.Ui, so the SDK must be told this app needs the Blazor script. -->
+    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Photino.NET" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Osiris.Ui\Osiris.Ui.csproj" />
+  </ItemGroup>
+
+</Project>

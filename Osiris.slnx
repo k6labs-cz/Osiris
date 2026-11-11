@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Osiris.Abstractions/Osiris.Abstractions.csproj" />
+    <Project Path="src/Osiris.Core/Osiris.Core.csproj" />
+    <Project Path="src/Osiris.Tools.Database/Osiris.Tools.Database.csproj" />
+    <Project Path="src/Osiris.Ui/Osiris.Ui.csproj" />
+    <Project Path="src/Osiris.Cli/Osiris.Cli.csproj" />
+    <Project Path="src/Osiris.Desktop/Osiris.Desktop.csproj" />
+    <Project Path="src/Osiris.Web/Osiris.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Osiris.Tests/Osiris.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,45 @@
+# Osiris as a Flatpak: the desktop app (the default command) and the terminal app
+# (flatpak run --command=osiris cz.k6labs.Osiris) from the self-contained builds that
+# packaging/flatpak/build.sh publishes into artifacts/flatpak/.
+app-id: cz.k6labs.Osiris
+runtime: org.gnome.Platform   # WebKitGTK for the desktop app's window
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: osiris-desktop
+finish-args:
+  - --share=network            # the model's API, MCP servers, NuGet packages
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # A workspace is any folder the user chooses; the agent reads and writes files there.
+  - --filesystem=home
+modules:
+  - name: osiris
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/osiris /app/bin
+      - cp -r desktop /app/lib/osiris/desktop
+      - cp -r cli /app/lib/osiris/cli
+      - install -Dm755 osiris-desktop.sh /app/bin/osiris-desktop
+      - install -Dm755 osiris.sh /app/bin/osiris
+      - install -Dm644 cz.k6labs.Osiris.desktop /app/share/applications/cz.k6labs.Osiris.desktop
+      - install -Dm644 cz.k6labs.Osiris.metainfo.xml /app/share/metainfo/cz.k6labs.Osiris.metainfo.xml
+      - install -Dm644 cz.k6labs.Osiris.svg /app/share/icons/hicolor/scalable/apps/cz.k6labs.Osiris.svg
+    sources:
+      - type: dir
+        path: ../../artifacts/flatpak
+      - type: file
+        path: cz.k6labs.Osiris.desktop
+      - type: file
+        path: cz.k6labs.Osiris.metainfo.xml
+      - type: file
+        path: cz.k6labs.Osiris.svg
+      - type: script
+        dest-filename: osiris-desktop.sh
+        commands:
+          - exec /app/lib/osiris/desktop/osiris-desktop "$@"
+      - type: script
+        dest-filename: osiris.sh
+        commands:
+          - exec /app/lib/osiris/cli/osiris "$@"

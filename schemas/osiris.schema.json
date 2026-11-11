@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/k6labs-cz/Osiris/main/schemas/osiris.schema.json",
+  "title": "Osiris configuration (osiris.json)",
+  "description": "The configuration of an Osiris agent: .osiris/osiris.json in a workspace, or osiris.json in the user's configuration folder as the default for all workspaces. Everything is optional.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "model": {
+      "description": "The model the agent talks to: any OpenAI-compatible API. Missing values fall back to the user's or the built-in default (Mistral).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": { "type": "string", "format": "uri", "description": "The API's base address, e.g. https://api.openai.com/v1 or http://localhost:11434/v1 (Ollama).", "examples": ["https://api.mistral.ai/v1"] },
+        "name": { "type": "string", "description": "The chat model.", "examples": ["mistral-small-latest"] },
+        "embedding": { "type": "string", "description": "The embedding model of the knowledge base search; changing it reindexes.", "examples": ["mistral-embed"] },
+        "apiKey": {
+          "type": "string",
+          "description": "The API key, never in plain text: {{secret:NAME}} (a workspace secret allowed for the endpoint's host) or {{env:NAME}} (an environment variable; only on your own machine).",
+          "pattern": "^\\{\\{\\s*(secret|env):[A-Za-z_][A-Za-z0-9_]*\\s*\\}\\}$",
+          "examples": ["{{env:OPENAI_API_KEY}}", "{{secret:LLM_KEY}}"]
+        }
+      }
+    },
+    "packages": {
+      "description": "NuGet packages with tools, guards and MCP servers for the agent: the package id and its version, or an object with the version and the package's settings.",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string", "description": "The version, e.g. 1.0.0 (or a NuGet range such as [1.0,2.0) or 1.*).", "examples": ["1.0.0"] },
+          {
+            "type": "object",
+            "required": ["version"],
+            "additionalProperties": false,
+            "properties": {
+              "version": { "type": "string" },
+              "settings": { "type": "object", "description": "Passed to the package's extensions (OsirisContext.Settings)." }
+            }
+          }
+        ]
+      },
+      "examples": [{ "k6labs.Osiris.Tools.Database": "0.1.0" }]
+    },
+    "sources": {
+      "description": "NuGet sources besides nuget.org and k6labs' GitHub Packages: a v3 index address or a local folder. Used on your own machine only; a server's operator configures its sources.",
+      "type": "array",
+      "items": { "type": "string" },
+      "examples": [["https://nuget.pkg.github.com/acme/index.json"]]
+    },
+    "mcp": {
+      "description": "MCP servers reached over HTTP; their tools are offered to the agent as <name>_<tool>.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["url"],
+        "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "description": "The server's endpoint. After the host it may hold {{secret:NAME}}." },
+          "headers": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Request headers; values may hold {{secret:NAME}}." },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

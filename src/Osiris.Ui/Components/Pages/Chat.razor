@@ -1,0 +1,260 @@
+@using System.Text.Json
+@page "/w/{Id}"
+@page "/w/{Id}/{ThreadId:guid}"
+@implements IDisposable
+@inject Workspaces Workspaces
+@inject UiOptions Options
+@inject NavigationManager Nav
+
+@if (agent is null)
+{
+    <main class="page">
+        <Typography Variant="TextVariant.Title">Workspace not found</Typography>
+        <div><Button Variant="ButtonVariant.Secondary" Href="">All workspaces</Button></div>
+    </main>
+    return;
+}
+
+<div class="layout">
+    <nav class="sidebar" aria-label="Chats">
+        <div class="sidebar-head">
+            <span class="title">@agent.Workspace.Name</span>
+            <ThemeToggle />
+            @if (admin) { <Button Variant="ButtonVariant.Ghost" Icon="settings" Href="@($"w/{Esc}/settings")" aria-label="Settings" title="Settings" /> }
+        </div>
+        <Button Variant="ButtonVariant.Secondary" Icon="plus" Href="@($"w/{Esc}")" Block="true">New chat</Button>
+        @foreach (var t in threads)
+        {
+            <div class="thread @(t.Id == thread ? "active" : "")">
+                <a href="w/@Esc/@t.Id" title="@t.Title">@t.Title</a>
+                <button type="button" aria-label="Delete chat" title="Delete" @onclick="() => Delete(t.Id)">✕</button>
+            </div>
+        }
+        @if (Workspaces.Many)
+        {
+            <div class="sidebar-foot row">
+                <span class="grow muted">@userName</span>
+                <a href="">Workspaces</a>
+                @if (Options.SignOutPath is { } signOut) { <a href="@signOut">Sign out</a> }
+            </div>
+        }
+    </nav>
+
+    <main class="chat">
+        <div class="scroll">
+            <div class="messages">
+                @foreach (var m in messages.Where(m => m.Role == ChatRole.User || m.Role == ChatRole.Assistant))
+                {
+                    var user = m.Role == ChatRole.User;
+                    var calls = m.Contents.OfType<FunctionCallContent>().ToList();
+                    @if (calls.Count > 0)
+                    {
+                        <div class="tools">
+                            @foreach (var f in calls)
+                            {
+                                <Badge Icon="wrench" Tone="@(done.Contains(f.CallId) ? Tone.Muted : Tone.Primary)">@f.Name</Badge>
+                            }
+                        </div>
+                    }
+                    @foreach (var t in m.Contents.OfType<TextContent>().Where(t => t.Text.Length > 0))
+                    {
+                        if (user)
+                        {
+                            <div class="bubble text">@Questions.Display(t.Text)</div>
+                        }
+                        else
+                        {
+                            <div class="prose">@Markdown.Render(t.Text)</div>
+                        }
+                    }
+                }
+                @if (running && messages.LastOrDefault()?.Contents.Count == 0)
+                {
+                    <div class="working" role="status">Working…</div>
+                }
+                @if (error is not null)
+                {
+                    <Alert Severity="AlertSeverity.Danger">@error</Alert>
+                }
+            </div>
+        </div>
+
+        @if (question is not null && !running)
+        {
+            @* The open question's form; a one-field question can also be answered in the composer. *@
+            <form class="question" @onsubmit="Answer">
+                <Card>
+                    <Header>@question.Title</Header>
+                    <ChildContent>
+                        <div class="stack">
+                            @foreach (var f in question.Fields)
+                            {
+                                var value = ValueOf(f.Name);
+                                @switch (f.Type)
+                                {
+                                    case "boolean":
+                                        <RadioGroup TValue="string" @bind-Value="value.Text" Label="@f.Label" Inline="true" AllowClear="false">
+                                            <Radio TValue="string" Value="@("yes")">Yes</Radio>
+                                            <Radio TValue="string" Value="@("no")">No</Radio>
+                                        </RadioGroup>
+                                        break;
+                                    case "select":
+                                        <Field Label="@f.Label" Required="f.Required">
+                                            <Select TValue="string" @bind-Value="value.Text" Label="@f.Label" Placeholder="–"
+                                                    Options="@((f.Options ?? []).Select(o => new SelectOption<string>(o.Value, o.Label)).ToList())" />
+                                        </Field>
+                                        break;
+                                    case "multiselect":
+                                        <Field Label="@f.Label" Required="f.Required">
+                                            @foreach (var o in f.Options ?? [])
+                                            {
+                                                var pick = value.Pick(o.Value);
+                                                <Checkbox @bind-Value="pick.On" AllowClear="false">@o.Label</Checkbox>
+                                            }
+                                        </Field>
+                                        break;
+                                    default:
+                                        <Field Label="@f.Label" Required="f.Required">
+                                            <TextField @bind-Value="value.Text" Type="@(f.Type is "number" or "date" ? f.Type : "text")" AllowClear="false" />
+                                        </Field>
+                                        break;
+                                }
+                            }
+                            <div class="row">
+                                <Button Type="submit">Send</Button>
+                                <Button Variant="ButtonVariant.Secondary" OnClick="Cancel">Cancel</Button>
+                            </div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </form>
+        }
+
+        <form class="composer" @onsubmit="Send">
+            <div class="grow"><TextField @bind-Value="draft" Placeholder="Message Osiris…" Disabled="running" AllowClear="false" aria-label="Message" autocomplete="off" /></div>
+            <Button Type="submit" Icon="send" Disabled="running">Send</Button>
+        </form>
+    </main>
+</div>
+
+@code {
+    [Parameter] public required string Id { get; set; }
+    [Parameter] public Guid? ThreadId { get; set; }
+    [CascadingParameter] public required Task<AuthenticationState> Auth { get; set; }
+
+    readonly CancellationTokenSource closing = new();
+    Agent? agent;
+    ThreadStore? store;
+    Guid thread;
+    List<ChatMessage> messages = [];
+    HashSet<string> done = [];
+    IReadOnlyList<ThreadInfo> threads = [];
+    string? draft = "";
+    string? error;
+    bool running;
+    Question? question;
+    Dictionary<string, FieldValue> values = [];
+    bool admin;
+    string userName = "";
+
+    /// <summary>What the user filled into one field of a question.</summary>
+    sealed class FieldValue
+    {
+        public string? Text { get; set; }
+        public Dictionary<string, Choice> Picked { get; } = [];
+        public Choice Pick(string option) => Picked.TryGetValue(option, out var c) ? c : Picked[option] = new();
+    }
+
+    sealed class Choice { public bool On { get; set; } }
+
+    string Esc => Uri.EscapeDataString(Id);
+
+    FieldValue ValueOf(string field) => values.TryGetValue(field, out var v) ? v : values[field] = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var principal = (await Auth).User;
+        agent = Workspaces.Get(Id, principal);
+        admin = Workspaces.CanAdminister(Id, principal);
+        userName = principal.FindFirst("name")?.Value ?? principal.Identity?.Name ?? "";
+        if (agent is null) return;
+        store = agent.Threads;
+        thread = ThreadId ?? Guid.NewGuid();
+        messages = store.Load(thread);
+        done = messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Select(r => r.CallId).ToHashSet();
+        threads = store.List();
+        error = null;
+        AskOpenQuestion();
+    }
+
+    void AskOpenQuestion()
+    {
+        question = agent!.Questions.Open(thread);
+        values = [];
+    }
+
+    Task Answer()
+    {
+        var given = new Dictionary<string, object?>();
+        foreach (var f in question!.Fields)
+        {
+            var v = ValueOf(f.Name);
+            if (f.Type == "multiselect") given[f.Name] = v.Picked.Where(p => p.Value.On).Select(p => p.Key).ToArray();
+            else if (f.Type == "boolean") { if (v.Text is not null) given[f.Name] = v.Text == "yes"; }
+            else if (!string.IsNullOrEmpty(v.Text)) given[f.Name] = v.Text;
+        }
+        return Run(Questions.AnswerPrefix + JsonSerializer.Serialize(new { id = question.Id, values = given }), "Answered.");
+    }
+
+    Task Cancel() => Run(Questions.AnswerPrefix + JsonSerializer.Serialize(new { id = question!.Id, cancel = true }), "Cancelled.");
+
+    Task Send()
+    {
+        var text = (draft ?? "").Trim();
+        if (text.Length == 0) return Task.CompletedTask;
+        draft = "";
+        return Run(text, text);
+    }
+
+    /// <summary>Runs a turn with <paramref name="message"/>; the chat shows <paramref name="shown"/> for it until it reloads.</summary>
+    async Task Run(string message, string shown)
+    {
+        if (running || agent is null) return;
+        running = true;
+        error = null;
+        messages.Add(new ChatMessage(ChatRole.User, shown));
+        var answer = new ChatMessage(ChatRole.Assistant, []);
+        messages.Add(answer);
+
+        await foreach (var e in agent.RunAsync(thread, message, closing.Token))
+        {
+            switch (e)
+            {
+                case TextDelta d when answer.Contents.LastOrDefault() is TextContent last: last.Text += d.Delta; break;
+                case TextDelta d: answer.Contents.Add(new TextContent(d.Delta)); break;
+                case ToolCall c: answer.Contents.Add(new FunctionCallContent(c.ToolCallId, c.ToolName)); break;
+                case ToolResult r: done.Add(r.ToolCallId); break;
+                case RunError err: error = err.Message; break;
+            }
+            StateHasChanged();
+        }
+        running = false;
+        AskOpenQuestion();
+
+        if (ThreadId != thread) Nav.NavigateTo($"w/{Uri.EscapeDataString(Id)}/{thread}"); // reloads the thread as stored
+        else threads = store!.List();
+    }
+
+    void Delete(Guid id)
+    {
+        store!.Delete(id);
+        if (id == thread) Nav.NavigateTo($"w/{Uri.EscapeDataString(Id)}");
+        else threads = store.List();
+    }
+
+    public void Dispose()
+    {
+        closing.Cancel();
+        closing.Dispose();
+    }
+}

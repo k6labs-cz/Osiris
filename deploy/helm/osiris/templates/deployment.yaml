@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "osiris.fullname" . }}
+  labels:
+    {{- include "osiris.labels" . | nindent 4 }}
+spec:
+  replicas: 1          # file-based state: exactly one replica
+  strategy:
+    type: Recreate     # never two pods over the same workspaces
+  selector:
+    matchLabels:
+      {{- include "osiris.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Restart when the configuration in values changes.
+        checksum/values: {{ toJson (dict "auth" .Values.auth "model" .Values.model "packages" .Values.allowedPackages "token" .Values.packagesToken) | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "osiris.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: osiris
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: Auth__Authority
+              value: {{ include "osiris.authority" . | quote }}
+            - name: Auth__ClientId
+              value: {{ .Values.auth.clientId | quote }}
+            - name: Auth__AdministratorRole
+              value: {{ .Values.auth.administratorRole | quote }}
+            - name: Auth__UserRole
+              value: {{ .Values.auth.userRole | quote }}
+            - name: Osiris__Model__Endpoint
+              value: {{ .Values.model.endpoint | quote }}
+            - name: Osiris__Model__Name
+              value: {{ .Values.model.name | quote }}
+            - name: Osiris__Model__Embedding
+              value: {{ .Values.model.embedding | quote }}
+            {{- range $i, $package := .Values.allowedPackages }}
+            - name: Osiris__AllowedPackages__{{ $i }}
+              value: {{ $package | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            # Auth__ClientSecret, Osiris__Model__ApiKey, Osiris__SecretKey, OSIRIS_PACKAGES_TOKEN
+            - secretRef:
+                name: {{ include "osiris.secretName" . }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "osiris.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

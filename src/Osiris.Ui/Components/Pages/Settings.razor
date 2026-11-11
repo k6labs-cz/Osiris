@@ -1,0 +1,398 @@
+@page "/w/{Id}/settings"
+@inject Workspaces Workspaces
+
+@if (agent is null)
+{
+    <main class="page">
+        <Typography Variant="TextVariant.Title">Workspace not found</Typography>
+        <div><Button Variant="ButtonVariant.Secondary" Href="">All workspaces</Button></div>
+    </main>
+    return;
+}
+
+<main class="page">
+    <div class="page-head">
+        <Button Variant="ButtonVariant.Text" Icon="arrow-left" Href="@($"w/{Esc}")">Chat</Button>
+        <Typography Variant="TextVariant.Title" Class="grow">@agent.Workspace.Name · Settings</Typography>
+        <ThemeToggle />
+    </div>
+
+    @if (error is not null)
+    {
+        <Alert Severity="AlertSeverity.Danger" OnDismiss="() => error = null">@error</Alert>
+    }
+
+    <div class="tabs" role="tablist">
+        @foreach (var name in Tabs)
+        {
+            <Button Variant="@(tab == name ? ButtonVariant.Primary : ButtonVariant.Ghost)" Href="@($"w/{Esc}/settings?tab={Slug(name)}")" role="tab" aria-selected="@(tab == name ? "true" : "false")">@name</Button>
+        }
+    </div>
+
+    @switch (tab)
+    {
+        case "Configuration":
+            <div class="stack config">
+                <span class="muted">The agent's configuration, <span class="mono">.osiris/osiris.json</span>: its model, the NuGet packages with its tools and guards, and MCP servers. It applies from the next message.</span>
+                @foreach (var (name, why) in agent.Packages.Unavailable)
+                {
+                    <Alert Severity="AlertSeverity.Warning" Title="@name">@why</Alert>
+                }
+                <TextArea @bind-Value="config" Rows="16" AllowClear="false" spellcheck="false" aria-label="osiris.json" />
+                <div><Button OnClick="SaveConfig">Save</Button></div>
+            </div>
+            break;
+
+        case "Secrets":
+            <div class="stack">
+                <span class="muted">Access keys the agent uses as <span class="mono">{{secret:NAME}}</span> in http_request, MCP servers and the model's apiKey, only for the listed hosts. It never sees the value.</span>
+                @foreach (var s in agent.Secrets.List())
+                {
+                    <Card>
+                        <div class="row">
+                            <strong class="grow mono">@s.Name</strong>
+                            <Button Variant="ButtonVariant.Text" OnClick="() => EditSecret(s)">Edit</Button>
+                            <Button Variant="ButtonVariant.Danger" OnClick="() => agent.Secrets.Delete(s.Name)">Delete</Button>
+                        </div>
+                        <div class="row">
+                            @foreach (var h in s.AllowedHosts) { <Badge>@h</Badge> }
+                            <span class="muted">@s.Description</span>
+                        </div>
+                    </Card>
+                }
+                <Card>
+                    <Header>@(secretEditing ? $"Change {secret.Name}" : "Add a secret")</Header>
+                    <ChildContent>
+                        <div class="stack">
+                            <Field Label="Name"><TextField @bind-Value="secret.Name" Placeholder="CRM_TOKEN" Disabled="secretEditing" AllowClear="false" /></Field>
+                            <Field Label="Value" Hint="@(secretEditing ? "Leave empty to keep it" : null)"><TextField @bind-Value="secret.Value" Type="password" AllowClear="false" autocomplete="off" /></Field>
+                            <Field Label="Allowed hosts, comma separated"><TextField @bind-Value="secret.Hosts" Placeholder="api.example.com, *.example.com" AllowClear="false" /></Field>
+                            <Field Label="Description"><TextField @bind-Value="secret.Description" AllowClear="false" /></Field>
+                            <div class="row">
+                                <Button OnClick="SaveSecret">Save</Button>
+                                @if (secretEditing) { <Button Variant="ButtonVariant.Secondary" OnClick="() => { secret = new(); secretEditing = false; }">Cancel</Button> }
+                            </div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </div>
+            break;
+
+        case "MCP servers":
+            <div class="stack">
+                <span class="muted">Remote MCP servers (HTTP) whose tools the agent gets as <span class="mono">server_tool</span>. Headers may hold <span class="mono">{{secret:NAME}}</span>.</span>
+                @foreach (var (name, s) in agent.Mcp.Servers())
+                {
+                    <Card>
+                        <div class="row">
+                            <strong class="grow mono">@name</strong>
+                            <Button Variant="ButtonVariant.Text" OnClick="() => Run(() => agent.Mcp.Put(name, s.Url, null, !s.Enabled))">@(s.Enabled ? "Disable" : "Enable")</Button>
+                            <Button Variant="ButtonVariant.Text" OnClick="() => EditServer(name, s)">Edit</Button>
+                            <Button Variant="ButtonVariant.Danger" OnClick="() => agent.Mcp.Delete(name)">Delete</Button>
+                        </div>
+                        <div class="row">
+                            <span class="mono muted">@s.Url</span>
+                            @if (!s.Enabled) { <Badge Tone="Tone.Muted">disabled</Badge> }
+                            @foreach (var h in s.Headers?.Keys ?? Enumerable.Empty<string>()) { <Badge>@h</Badge> }
+                            @if (agent.Mcp.Unavailable.TryGetValue(name, out var why)) { <Badge Tone="Tone.Danger">@why</Badge> }
+                        </div>
+                    </Card>
+                }
+                <Card>
+                    <Header>@(serverEditing ? $"Change {server.Name}" : "Add a server")</Header>
+                    <ChildContent>
+                        <div class="stack">
+                            <Field Label="Name"><TextField @bind-Value="server.Name" Placeholder="my-crm" Disabled="serverEditing" AllowClear="false" /></Field>
+                            <Field Label="URL"><TextField @bind-Value="server.Url" Type="url" Placeholder="https://mcp.example.com/mcp" AllowClear="false" /></Field>
+                            <Field Label="Headers, one per line"><TextArea @bind-Value="server.Headers" Rows="3" Placeholder="@HeadersHint" AllowClear="false" /></Field>
+                            <div class="row">
+                                <Button OnClick="SaveServer">Save</Button>
+                                @if (serverEditing) { <Button Variant="ButtonVariant.Secondary" OnClick="() => { server = new(); serverEditing = false; }">Cancel</Button> }
+                            </div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </div>
+            break;
+
+        case "Rules":
+            <div class="stack">
+                <span class="muted">Rules the agent keeps to above everything else. Every message, answer and question is checked against them.</span>
+                @foreach (var g in agent.Guards.List())
+                {
+                    <Card>
+                        <div class="row">
+                            <strong class="grow mono">@g.Name</strong>
+                            <Button Variant="ButtonVariant.Text" OnClick="() => rule = new() { Name = g.Name, Description = g.Description, Text = g.Rule }">Edit</Button>
+                            <Button Variant="ButtonVariant.Danger" OnClick="() => agent.Guards.Delete(g.Name)">Delete</Button>
+                        </div>
+                        @if (g.Description.Length > 0) { <div class="muted">@g.Description</div> }
+                        <div class="text">@g.Rule</div>
+                    </Card>
+                }
+                <Card>
+                    <Header>Add or change a rule</Header>
+                    <ChildContent>
+                        <div class="stack">
+                            <Field Label="Name"><TextField @bind-Value="rule.Name" Placeholder="no-prices" AllowClear="false" /></Field>
+                            <Field Label="Description"><TextField @bind-Value="rule.Description" AllowClear="false" /></Field>
+                            <Field Label="Rule"><TextArea @bind-Value="rule.Text" Rows="3" Placeholder="Never tell prices to anyone." AllowClear="false" /></Field>
+                            <div><Button OnClick="SaveRule">Save</Button></div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </div>
+            break;
+
+        case "Skills":
+            <div class="stack">
+                <span class="muted">Procedures the agent loads when a task matches their description. A workspace skill replaces a bundled one of the same name.</span>
+                @foreach (var k in agent.Skills.List())
+                {
+                    var own = agent.Skills.IsOwn(k.Name);
+                    <Card>
+                        <div class="row">
+                            <strong class="grow mono">@k.Name</strong>
+                            @if (!own) { <Badge Tone="Tone.Secondary">bundled</Badge> }
+                            <Button Variant="ButtonVariant.Text" OnClick="() => skill = new() { Name = k.Name, Description = k.Description, Instructions = k.Instructions }">Edit</Button>
+                            @if (own) { <Button Variant="ButtonVariant.Danger" OnClick="() => agent.Skills.Delete(k.Name)">Delete</Button> }
+                        </div>
+                        <div class="muted">@k.Description</div>
+                    </Card>
+                }
+                <Card>
+                    <Header>Add or change a skill</Header>
+                    <ChildContent>
+                        <div class="stack">
+                            <Field Label="Name"><TextField @bind-Value="skill.Name" Placeholder="issue-invoice" AllowClear="false" /></Field>
+                            <Field Label="Description: what it does and when to use it"><TextField @bind-Value="skill.Description" AllowClear="false" /></Field>
+                            <Field Label="Instructions (Markdown)"><TextArea @bind-Value="skill.Instructions" Rows="10" AllowClear="false" /></Field>
+                            <div><Button OnClick="SaveSkill">Save</Button></div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </div>
+            break;
+
+        case "Memory":
+            <div class="stack">
+                <span class="muted">Lasting facts the agent remembers across conversations; the newest @Memories.PromptLimit go into every prompt.</span>
+                @foreach (var m in agent.Memories.List(int.MaxValue))
+                {
+                    <div class="row">
+                        <span class="grow">@m.Content</span>
+                        <Button Variant="ButtonVariant.Text" OnClick="() => agent.Memories.Forget(m.Id)">Forget</Button>
+                    </div>
+                    <Divider />
+                }
+                <form class="row" @onsubmit="Remember">
+                    <div class="grow"><TextField @bind-Value="memory" Placeholder="A fact to remember" AllowClear="false" aria-label="A fact to remember" /></div>
+                    <Button Type="submit">Remember</Button>
+                </form>
+            </div>
+            break;
+
+        case "Scheduled":
+            <div class="stack">
+                <span class="muted">Tasks the agent runs by itself; each run is a new chat. They run while Osiris runs.</span>
+                @foreach (var t in agent.Schedules.List())
+                {
+                    <Card>
+                        <div class="row">
+                            <strong class="grow">@t.Title</strong>
+                            @if (t.LastStatus is { } status) { <Badge Tone="@(status == "done" ? Tone.Success : Tone.Danger)">@status</Badge> }
+                            @if (t.LastThread is { } last) { <Button Variant="ButtonVariant.Text" Href="@($"w/{Esc}/{last}")">Last run</Button> }
+                            <Button Variant="ButtonVariant.Danger" OnClick="() => agent.Schedules.Delete(t.Id)">Cancel</Button>
+                        </div>
+                        <div class="muted">
+                            @(t.Cron is null ? "Once" : $"cron {t.Cron}") · @(t.Enabled ? $"next {Local(t.NextRunAt)}" : "done")
+                            @(t.LastError is null ? "" : $" · {t.LastError}")
+                        </div>
+                        <div class="text muted">@t.Prompt</div>
+                    </Card>
+                }
+                <Card>
+                    <Header>Schedule a task</Header>
+                    <ChildContent>
+                        <div class="stack">
+                            <Field Label="Title"><TextField @bind-Value="task.Title" AllowClear="false" /></Field>
+                            <Field Label="What the agent should do"><TextArea @bind-Value="task.Prompt" Rows="3" AllowClear="false" /></Field>
+                            <Field Label="Repeat (cron, local time)" Hint="e.g. 0 7 * * 1-5"><TextField @bind-Value="task.Cron" AllowClear="false" /></Field>
+                            <Field Label="…or once at"><TextField @bind-Value="task.RunAt" Placeholder="2026-12-01 07:00" AllowClear="false" /></Field>
+                            <div><Button OnClick="ScheduleTask">Schedule</Button></div>
+                        </div>
+                    </ChildContent>
+                </Card>
+            </div>
+            break;
+    }
+</main>
+
+@code {
+    [Parameter] public required string Id { get; set; }
+
+    /// <summary>The open tab, in the address so a tab can be linked to: <c>?tab=mcp-servers</c>.</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    [CascadingParameter] public required Task<AuthenticationState> Auth { get; set; }
+
+    const string HeadersHint = "Authorization: Bearer {{secret:CRM_TOKEN}}";
+
+    sealed class SecretForm { public string? Name { get; set; } = ""; public string? Value { get; set; } = ""; public string? Hosts { get; set; } = ""; public string? Description { get; set; } = ""; }
+    sealed class ServerForm { public string? Name { get; set; } = ""; public string? Url { get; set; } = ""; public string? Headers { get; set; } = ""; }
+    sealed class RuleForm { public string? Name { get; set; } = ""; public string? Description { get; set; } = ""; public string? Text { get; set; } = ""; }
+    sealed class SkillForm { public string? Name { get; set; } = ""; public string? Description { get; set; } = ""; public string? Instructions { get; set; } = ""; }
+    sealed class TaskForm { public string? Title { get; set; } = ""; public string? Prompt { get; set; } = ""; public string? Cron { get; set; } = ""; public string? RunAt { get; set; } = ""; }
+
+    Agent? agent;
+    string? error;
+    SecretForm secret = new();
+    bool secretEditing;
+    ServerForm server = new();
+    bool serverEditing;
+    RuleForm rule = new();
+    SkillForm skill = new();
+    string? memory = "";
+    string? config = "";
+    string tab = "Configuration";
+
+    static readonly string[] Tabs = ["Configuration", "Secrets", "MCP servers", "Rules", "Skills", "Memory", "Scheduled"];
+    TaskForm task = new();
+
+    string Esc => Uri.EscapeDataString(Id);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Settings are an administrator's; for anyone else the page doesn't exist.
+        agent = Workspaces.Administer(Id, (await Auth).User);
+        var open = Tabs.FirstOrDefault(t => Slug(t) == Tab) ?? Tabs[0];
+        if (open != tab) error = null;
+        tab = open;
+        if (agent is not null && tab == Tabs[0]) LoadConfig();
+    }
+
+    static string Slug(string name) => name.ToLowerInvariant().Replace(' ', '-');
+
+    void LoadConfig() => config = File.Exists(agent!.Workspace.ConfigFile) ? File.ReadAllText(agent.Workspace.ConfigFile) : "{\n}\n";
+
+    /// <summary>Saves osiris.json once it reads as a configuration, so a typo never leaves the agent without one.</summary>
+    async Task SaveConfig()
+    {
+        var file = agent!.Workspace.ConfigFile;
+        var check = file + ".check";
+        try
+        {
+            File.WriteAllText(check, config ?? "");
+            OsirisConfig.Load(check);
+            File.Move(check, file, overwrite: true);
+            error = null;
+            // Loads the packages now, so what's wrong with them shows here and not in the next chat.
+            await agent.Packages.LoadAsync();
+        }
+        catch (ConfigurationException e)
+        {
+            File.Delete(check);
+            error = e.Message.Replace(check, "osiris.json");
+        }
+    }
+
+    static string T(string? text) => (text ?? "").Trim();
+
+    /// <summary>Runs a change; a refusal shows above the tabs.</summary>
+    bool Run(Action action)
+    {
+        try
+        {
+            action();
+            error = null;
+            return true;
+        }
+        catch (Exception e) when (e is ArgumentException or SecretException or ConfigurationException)
+        {
+            error = e.Message;
+            return false;
+        }
+    }
+
+    void EditSecret(SecretInfo s)
+    {
+        secret = new() { Name = s.Name, Hosts = string.Join(", ", s.AllowedHosts), Description = s.Description };
+        secretEditing = true;
+    }
+
+    void SaveSecret()
+    {
+        // An empty value while changing keeps the stored one.
+        var value = !string.IsNullOrEmpty(secret.Value) ? secret.Value : secretEditing ? null : "";
+        if (Run(() => agent!.Secrets.Put(T(secret.Name), value, T(secret.Hosts).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), T(secret.Description))))
+        {
+            secret = new();
+            secretEditing = false;
+        }
+    }
+
+    void EditServer(string name, McpServerConfig s)
+    {
+        // Header values aren't shown (they may be keys): empty keeps them.
+        server = new() { Name = name, Url = s.Url };
+        serverEditing = true;
+    }
+
+    void SaveServer()
+    {
+        var lines = T(server.Headers).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Dictionary<string, string>? headers = null;
+        if (lines.Length > 0 || !serverEditing)
+        {
+            headers = [];
+            foreach (var line in lines)
+            {
+                var colon = line.IndexOf(':');
+                if (colon <= 0) { error = $"A header is \"Name: value\", not \"{line}\"."; return; }
+                headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
+            }
+        }
+        var enabled = agent!.Mcp.Servers().GetValueOrDefault(T(server.Name))?.Enabled ?? true;
+        if (Run(() => agent.Mcp.Put(T(server.Name), T(server.Url), headers, enabled)))
+        {
+            server = new();
+            serverEditing = false;
+        }
+    }
+
+    /// <summary>The agent's tools answer in words; one starting with "Error" is shown, the rest means done.</summary>
+    bool Done(string answer)
+    {
+        error = answer.StartsWith("Error") ? answer : null;
+        return error is null;
+    }
+
+    void SaveSkill()
+    {
+        if (Done(agent!.Skills.SaveSkill(T(skill.Name), T(skill.Description), T(skill.Instructions)))) skill = new();
+    }
+
+    void Remember()
+    {
+        if (Done(agent!.Memories.Remember(T(memory)))) memory = "";
+    }
+
+    static string Local(DateTimeOffset? t) => t?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—";
+
+    void ScheduleTask()
+    {
+        DateTimeOffset? at = null;
+        if (T(task.RunAt).Length > 0)
+        {
+            // Typed in local time; the tool takes ISO 8601 with the offset.
+            if (!DateTime.TryParse(task.RunAt, out var local)) { error = $"\"{task.RunAt}\" isn't a date and time."; return; }
+            at = new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
+        }
+        var cron = T(task.Cron).Length > 0 ? T(task.Cron) : null;
+        if (Done(agent!.Schedules.ScheduleTask(T(task.Title), T(task.Prompt), cron, at?.ToString("O")))) task = new();
+    }
+
+    void SaveRule()
+    {
+        if (Run(() => agent!.Guards.Put(T(rule.Name), T(rule.Description), T(rule.Text)))) rule = new();
+    }
+}

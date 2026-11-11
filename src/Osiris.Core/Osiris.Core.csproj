@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>k6labs.Osiris.Core</AssemblyName>
+    <PackageId>k6labs.Osiris.Core</PackageId>
+    <!-- sqlite-vec has no stable release yet. -->
+    <NoWarn>$(NoWarn);NU5104</NoWarn>
+    <Description>The Osiris agent: a ReAct loop over a workspace folder with its built-in tools and guards, configured by .osiris/osiris.json and extended by NuGet packages.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Cronos" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="ModelContextProtocol.Core" />
+    <PackageReference Include="NuGet.Protocol" />
+    <!-- The vector search extension's native library (vec0) for each platform. -->
+    <PackageReference Include="sqlite-vec" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Osiris.Abstractions\Osiris.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The bundled skills, next to the app (Skills.BundledDir). -->
+    <Content Include="skills/**/SKILL.md" CopyToOutputDirectory="PreserveNewest" PackagePath="contentFiles/any/any/skills" PackageCopyToOutput="true" />
+    
+  </ItemGroup>
+
+</Project>

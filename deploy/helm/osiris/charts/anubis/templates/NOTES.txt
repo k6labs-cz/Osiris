@@ -1,0 +1,22 @@
+Anubis {{ .Chart.AppVersion }} is installed as {{ include "anubis.fullname" . }} in namespace {{ .Release.Namespace }}.
+
+{{- if .Values.ingress.enabled }}
+
+Public URL (issuer): {{ include "anubis.config" . | fromJson | dig "Anubis" "Issuer" "" }}
+{{- else }}
+
+No ingress is enabled. Try it locally:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "anubis.fullname" . }} 8080:{{ .Values.service.port }}
+  open http://localhost:8080
+Set ingress.enabled (or config.Anubis.Issuer) before using Anubis from other applications.
+{{- end }}
+
+Admin account: {{ dig "Anubis" "AdminEmail" "admin@anubis.local" .Values.config }}
+{{- if and (not .Values.secrets.existingSecret) .Values.secrets.generateAdminPassword (not (hasKey .Values.secrets.values "Anubis__AdminPassword")) }}
+Generated admin password (used when the account is created on the first start):
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "anubis.fullname" . }} -o jsonpath='{.data.Anubis__AdminPassword}' | base64 -d; echo
+{{- end }}
+{{- if not .Values.persistence.enabled }}
+
+WARNING: persistence is disabled. The database, settings and signing keys are lost when the pod restarts.
+{{- end }}

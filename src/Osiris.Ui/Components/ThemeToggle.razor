@@ -1,0 +1,10 @@
+<Button Variant="ButtonVariant.Ghost" Icon="@Icon" OnClick="Next" aria-label="@Label" title="@Label" />
+
+@code {
+    [CascadingParameter] public required Routes Root { get; set; }
+
+    string Icon => Root.Mode switch { ThemeMode.Light => "sun", ThemeMode.Dark => "moon", _ => "sun-moon" };
+    string Label => $"Theme: {Root.Mode.ToString().ToLowerInvariant()}";
+
+    void Next() => Root.SetMode(Root.Mode switch { ThemeMode.System => ThemeMode.Light, ThemeMode.Light => ThemeMode.Dark, _ => ThemeMode.System });
+}

@@ -1,0 +1,44 @@
+name: CI
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+  packages: read   # k6labs.Hathor from GitHub Packages
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      NuGetPackageSourceCredentials_k6labs: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - run: dotnet restore Osiris.slnx
+      - run: dotnet build Osiris.slnx -c Release --no-restore
+      - run: dotnet test Osiris.slnx -c Release --no-build
+      - name: Packages build
+        run: dotnet pack Osiris.slnx -c Release --no-build -o artifacts/packages
+
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@v4
+      - name: Lint and render the chart
+        run: |
+          helm lint deploy/helm/osiris --set model.apiKey=x --set auth.authority=https://id.example.com
+          helm template osiris deploy/helm/osiris --set model.apiKey=x --set auth.authority=https://id.example.com > /dev/null
+          helm template osiris deploy/helm/osiris --set model.apiKey=x --set ingress.enabled=true --set anubis.ingress.enabled=true > /dev/null

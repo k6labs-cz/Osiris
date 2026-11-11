@@ -1,0 +1,24 @@
+version: 2
+registries:
+  k6labs:
+    type: nuget-feed
+    url: https://nuget.pkg.github.com/k6labs-cz/index.json
+    username: x-access-token
+    password: ${{ secrets.K6LABS_PACKAGES_TOKEN }}
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    registries: ['k6labs']
+    schedule:
+      interval: weekly
+    groups:
+      microsoft:
+        patterns: ['Microsoft.*', 'System.*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

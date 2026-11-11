@@ -1,0 +1,15 @@
+apiVersion: v2
+name: anubis
+description: Anubis — free open-source OpenID Connect identity provider (single replica, SQLite on a persistent volume).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/k6labs-cz/Anubis
+sources:
+  - https://github.com/k6labs-cz/Anubis
+license: MIT
+keywords:
+  - oidc
+  - oauth2
+  - identity-provider
+  - sso

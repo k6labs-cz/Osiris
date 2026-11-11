@@ -1,0 +1,57 @@
+/* Layout only: colors, fonts and components come from Hathor's theme (its CSS variables). */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+.osiris { min-height: 100vh; background: var(--bg); color: var(--text); }
+.osiris a { color: inherit; text-decoration: none; }
+
+.page { max-width: 52rem; margin: 0 auto; padding: 2rem 1rem; display: flex; flex-direction: column; gap: 1rem; }
+.page-head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: .75rem; }
+.row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.muted { color: var(--text-muted); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
+.tabs { display: flex; gap: .25rem; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: .5rem; }
+.workspace { display: block; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-weight: 600; }
+.workspace:hover { border-color: var(--primary); }
+.config textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.layout { display: flex; height: 100vh; }
+.sidebar { width: 16rem; background: var(--surface); flex-shrink: 0; display: flex; flex-direction: column; gap: .25rem; padding: .75rem; border-right: 1px solid var(--border); overflow-y: auto; }
+.sidebar-head { display: flex; align-items: center; gap: .25rem; margin-bottom: .5rem; }
+.sidebar-head .title { flex: 1; font-weight: 600; padding-left: .25rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-foot { margin-top: auto; padding-top: .5rem; font-size: var(--font-size-sm); }
+.thread { display: flex; align-items: center; border-radius: var(--radius); }
+.thread:hover, .thread.active { background: var(--surface-raised); }
+.thread a { flex: 1; padding: .4rem .5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.thread button { visibility: hidden; border: 0; background: none; color: var(--text-muted); cursor: pointer; padding: .25rem .5rem; }
+.thread:hover button, .thread button:focus-visible { visibility: visible; }
+
+.chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+/* column-reverse keeps the newest message in view without any JavaScript */
+.scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column-reverse; }
+.messages { max-width: 48rem; width: 100%; margin: 0 auto; padding: 1rem; display: flex; flex-direction: column; gap: .75rem; }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.prose { overflow-wrap: anywhere; line-height: 1.6; }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p, .prose ul, .prose ol, .prose pre, .prose table, .prose blockquote { margin: .5rem 0; }
+.prose ul, .prose ol { padding-left: 1.25rem; }
+.prose h1, .prose h2, .prose h3 { font-size: 1.05rem; margin: .75rem 0 .25rem; }
+.osiris .prose a { color: var(--primary); text-decoration: underline; }
+.prose code { font-size: .9em; background: var(--surface-raised); padding: .1rem .3rem; border-radius: .25rem; }
+.prose pre { background: var(--surface-raised); padding: .75rem; border-radius: var(--radius); overflow-x: auto; }
+.prose pre code { background: none; padding: 0; }
+.prose table { border-collapse: collapse; }
+.prose th, .prose td { border: 1px solid var(--border); padding: .25rem .5rem; text-align: left; }
+.prose blockquote { border-left: 3px solid var(--border); padding-left: .75rem; color: var(--text-muted); }
+.tools { display: flex; flex-wrap: wrap; gap: .25rem; }
+.bubble { align-self: flex-end; max-width: 85%; padding: .5rem .75rem; background: var(--surface-raised); border-radius: var(--radius); }
+.working { color: var(--text-muted); animation: working 1.2s ease-in-out infinite; }
+@keyframes working { 50% { opacity: .35; } }
+
+.question { max-width: 48rem; width: calc(100% - 2rem); margin: 0 auto; }
+.composer { display: flex; gap: .5rem; max-width: 48rem; width: 100%; margin: 0 auto; padding: 1rem; align-items: center; }
+
+@media (max-width: 40rem) { .sidebar { display: none; } }
+@media (prefers-reduced-motion: reduce) { .working { animation: none; } }

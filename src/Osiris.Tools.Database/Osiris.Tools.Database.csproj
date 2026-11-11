@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>k6labs.Osiris.Tools.Database</AssemblyName>
+    <PackageId>k6labs.Osiris.Tools.Database</PackageId>
+    <Description>A database for the Osiris agent: typed tables in the workspace's own SQLite file, structured writes and read-only SELECTs. Add it to "packages" in .osiris/osiris.json.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Provided by the agent that loads the package. -->
+    <ProjectReference Include="..\Osiris.Abstractions\Osiris.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

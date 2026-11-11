@@ -1,0 +1,22 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: dropdown
+    attributes:
+      label: Where
+      options: [Terminal (osiris), Desktop, Server, Extension API / packages]
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Version and platform
+      placeholder: 0.1.0, Fedora 43 (Flatpak)
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What happened, and what did you expect
+      description: Steps to reproduce; the relevant part of .osiris/osiris.json without secrets.
+    validations:
+      required: true

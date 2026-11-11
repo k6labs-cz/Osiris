@@ -1,0 +1,37 @@
+{
+  "name": "Osiris",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.csharp"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "Osiris.slnx"
+      }
+    }
+  },
+  "remoteEnv": {
+    "SSL_CERT_DIR": "/home/vscode/.aspnet/dev-certs/trust:/usr/lib/ssl/certs"
+  },
+  "postCreateCommand":"dotnet restore && bash .devcontainer/setup-dev-cert.sh",
+  "forwardPorts": [5080, 8080],
+  "portsAttributes": {
+    "5080": {
+      "label": "Osiris desktop UI (--no-window --port=5080)",
+      "protocol": "http"
+    },
+    "8080": {
+      "label": "Osiris server",
+      "protocol": "http"
+    }
+  },
+  "remoteUser": "vscode"
+}

@@ -1,0 +1,18 @@
+Osiris is installed.
+
+{{- if .Values.ingress.enabled }}
+  Open https://{{ first .Values.ingress.hosts }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "osiris.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+
+Sign-in goes through Anubis at {{ include "osiris.authority" . }}.
+{{- if .Values.anubis.enabled }}
+  Its admin password:
+    kubectl -n {{ .Release.Namespace }} get secret {{ .Values.anubis.secrets.existingSecret }} -o jsonpath='{.data.Anubis__AdminPassword}' | base64 -d
+{{- end }}
+
+A workspace is a tenant in Anubis plus a folder of the same name here. For a workspace "acme":
+  1. in Anubis create the tenant "acme" (Tenants) and give users or groups the role
+     "{{ .Values.auth.userRole }}" or "{{ .Values.auth.administratorRole }}" of the "{{ .Values.auth.clientId }}" client in it (Roles),
+  2. kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "osiris.fullname" . }} -- mkdir -p /data/workspaces/acme

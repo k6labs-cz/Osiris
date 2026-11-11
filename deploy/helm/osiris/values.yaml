@@ -1,0 +1,154 @@
+# Osiris keeps its state in files (workspaces, threads, SQLite indexes), so the chart always runs
+# exactly ONE replica with the "Recreate" strategy on a ReadWriteOnce volume.
+
+image:
+  repository: ghcr.io/k6labs-cz/osiris
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Sign-in with Anubis (OpenID Connect). Each folder under /data/workspaces is a workspace, and a workspace is a
+# tenant in Anubis with the same id. Osiris's client there defines the roles "Administrator" and "User"; a user
+# gets into a workspace with one of them in that tenant (or in all tenants).
+auth:
+  # The PUBLIC address of Anubis (its issuer), reachable from the users' browsers and from this pod.
+  # Empty with anubis.enabled and anubis.ingress.enabled: https://<first anubis ingress host>.
+  authority: ""
+  # Osiris's client in Anubis. With the bundled Anubis it is seeded below (anubis.config.Anubis.Clients)
+  # and its secret is generated once and shared by both; set clientSecret to choose it yourself.
+  clientId: osiris
+  clientSecret: ""
+  # The roles of the client that open a workspace, and that also change its settings.
+  administratorRole: Administrator
+  userRole: User
+
+# The model used by workspaces that don't configure their own in .osiris/osiris.json.
+# Any OpenAI-compatible API.
+model:
+  endpoint: https://api.mistral.ai/v1
+  name: mistral-small-latest
+  embedding: mistral-embed
+  # Goes to the Secret. Required unless secrets.existingSecret has Osiris__Model__ApiKey.
+  apiKey: ""
+
+# NuGet packages (tools, guards, MCP servers) workspaces may load: code that runs inside this server,
+# so allow only what you trust. A trailing * matches a prefix.
+allowedPackages:
+  - k6labs.Osiris.*
+# A GitHub token with read:packages; GitHub Packages wants one even for k6labs' public packages.
+packagesToken: ""
+
+secrets:
+  # Use an existing Secret (External Secrets, Sealed Secrets, ...) with the keys Auth__ClientSecret,
+  # Osiris__Model__ApiKey, Osiris__SecretKey and optionally OSIRIS_PACKAGES_TOKEN instead of creating one.
+  existingSecret: ""
+
+# /data: the workspaces, the key sealing their secrets, sign-in cookie keys, downloaded packages.
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 5Gi
+  annotations: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+# TLS ends at the ingress; Osiris trusts its X-Forwarded-* headers, so expose the pod only through it.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  #   cert-manager.io/cluster-issuer: letsencrypt
+  hosts:
+    - osiris.example.com
+  tls: []
+  #   - secretName: osiris-tls
+  #     hosts: [osiris.example.com]
+
+extraEnv: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654   # "app" user of the .NET images
+  runAsGroup: 1654
+  fsGroup: 1654     # makes the volume writable for that user
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+startupProbe:
+  httpGet: { path: /health, port: http }
+  periodSeconds: 5
+  failureThreshold: 30
+readinessProbe:
+  httpGet: { path: /health, port: http }
+  periodSeconds: 10
+livenessProbe:
+  httpGet: { path: /health, port: http }
+  periodSeconds: 30
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# The bundled Anubis (see charts/anubis/values.yaml for everything it takes).
+anubis:
+  enabled: true
+  secrets:
+    # Created by THIS chart: Anubis's generated admin password and the osiris client's secret
+    # (Anubis__Clients__0__ClientSecret, the same value Osiris gets). Keep the name unless you
+    # manage that Secret yourself.
+    existingSecret: osiris-anubis
+  config:
+    Anubis:
+      Issuer: ""
+      AdminEmail: admin@example.com
+      General:
+        ServerName: Anubis
+      # Osiris's client with its roles. Keep it first in the list (the secret above is its ClientSecret) and
+      # set the two addresses to Osiris's public host. client_credentials is what lets Osiris ask Anubis about
+      # access tokens (introspection); the "roles" scope puts the user's roles per tenant into them.
+      Clients:
+        - ClientId: osiris
+          DisplayName: Osiris
+          RedirectUris: [ "https://osiris.example.com/signin-oidc" ]
+          PostLogoutRedirectUris: [ "https://osiris.example.com/signout-callback-oidc" ]
+          GrantTypes: [ "authorization_code", "client_credentials" ]
+          Scopes: [ "openid", "profile", "email", "roles" ]
+          RequireConsent: false
+          Roles:
+            - Name: Administrator
+              Description: Uses a workspace and changes its settings
+            - Name: User
+              Description: Uses a workspace
+      # Tenants to create at the first start; a workspace's folder has the same name.
+      Tenants: []
+      #   - Id: acme
+      #     DisplayName: Acme Ltd.
+  ingress:
+    enabled: false
+    hosts:
+      - id.example.com

@@ -1,0 +1,223 @@
+name: Release
+# A tag vX.Y.Z releases version X.Y.Z of everything:
+#   - NuGet packages (the extension API, the core, the database tools, the `osiris` .NET tool) to k6labs'
+#     GitHub Packages, and to nuget.org when the NUGET_API_KEY secret is set
+#   - the terminal and desktop apps for Linux (tar.gz and a Flatpak bundle), Windows (zip and an installer)
+#     and macOS (tar.gz, unsigned and untested: nobody here has a Mac)
+#   - the server's container image (ghcr.io/<owner>/osiris) and Helm chart (oci://ghcr.io/<owner>/charts/osiris)
+#   - a GitHub release with the downloads
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  NuGetPackageSourceCredentials_k6labs: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: read
+
+  # The release starts as a draft, the jobs below attach their files, and `publish` makes it public
+  # once everything succeeded.
+  draft:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "Osiris ${GITHUB_REF_NAME#v}" --generate-notes \
+              ${{ contains(github.ref_name, '-') && '--prerelease' || '' }}
+
+  nuget:
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - run: dotnet pack Osiris.slnx -c Release -p:Version="$VERSION" -o artifacts/packages
+      - name: Publish to GitHub Packages
+        run: >
+          dotnet nuget push 'artifacts/packages/*.nupkg' --skip-duplicate
+          --source "https://nuget.pkg.github.com/${GITHUB_REPOSITORY_OWNER}/index.json" --api-key "${{ secrets.GITHUB_TOKEN }}"
+      - name: Publish to nuget.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        if: env.NUGET_API_KEY != ''
+        run: dotnet nuget push 'artifacts/packages/*.nupkg' --skip-duplicate --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" artifacts/packages/*.nupkg --clobber
+
+  linux:
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      packages: read
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - name: Install Flatpak tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
+      - name: Build the Flatpak bundle (publishes linux-x64 first)
+        run: packaging/flatpak/build.sh "$VERSION"
+      - name: Archive the apps
+        run: |
+          tar -C artifacts/publish/linux-x64 -czf "artifacts/osiris-cli-$VERSION-linux-x64.tar.gz" cli
+          tar -C artifacts/publish/linux-x64 -czf "artifacts/osiris-desktop-$VERSION-linux-x64.tar.gz" desktop
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" artifacts/*.flatpak artifacts/*.tar.gz --clobber
+
+  windows:
+    needs: draft
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      packages: read
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - run: packaging/publish.sh win-x64 "$VERSION"
+      - name: Build the installer
+        run: |
+          choco install innosetup --no-progress -y
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "//DAppVersion=$VERSION" 'packaging\windows\osiris.iss'
+      - name: Archive the apps
+        run: |
+          cd artifacts/publish/win-x64
+          7z a "../../osiris-cli-$VERSION-win-x64.zip" cli
+          7z a "../../osiris-desktop-$VERSION-win-x64.zip" desktop
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" artifacts/*-setup.exe artifacts/*.zip --clobber
+
+  # Unsigned and untested builds: a failure here doesn't hold the release.
+  macos:
+    needs: draft
+    runs-on: macos-latest
+    timeout-minutes: 40
+    continue-on-error: true
+    permissions:
+      contents: write
+      packages: read
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+      - run: packaging/publish.sh osx-arm64 "$VERSION"
+      - name: Archive the apps
+        run: |
+          tar -C artifacts/publish/osx-arm64 -czf "artifacts/osiris-cli-$VERSION-osx-arm64.tar.gz" cli
+          tar -C artifacts/publish/osx-arm64 -czf "artifacts/osiris-desktop-$VERSION-osx-arm64.tar.gz" desktop
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" artifacts/*.tar.gz --clobber
+
+  server:
+    needs: draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: names
+        run: echo "owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            GITHUB_PACKAGES_USER=${{ github.actor }}
+            VERSION=${{ env.VERSION }}
+          secrets: |
+            github_packages_token=${{ secrets.GITHUB_TOKEN }}
+          tags: |
+            ghcr.io/${{ steps.names.outputs.owner }}/osiris:${{ env.VERSION }}
+            ${{ !contains(github.ref_name, '-') && format('ghcr.io/{0}/osiris:latest', steps.names.outputs.owner) || '' }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.title=Osiris
+            org.opencontainers.image.description=Osiris AI agent server
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: azure/setup-helm@v4
+      - name: Package and push the Helm chart
+        run: |
+          helm package deploy/helm/osiris --version "$VERSION" --app-version "$VERSION" --destination artifacts
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm push "artifacts/osiris-$VERSION.tgz" "oci://ghcr.io/${{ steps.names.outputs.owner }}/charts"
+      - name: Attach the chart to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "artifacts/osiris-$VERSION.tgz#osiris-helm-chart-$VERSION.tgz" --clobber
+
+  publish:
+    needs: [nuget, linux, windows, macos, server]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

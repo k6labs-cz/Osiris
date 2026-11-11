@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>cz.k6labs.Osiris</id>
+  <name>Osiris</name>
+  <summary>An AI agent that works over a folder of yours</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="cz.k6labs">
+    <name>k6labs</name>
+  </developer>
+  <description>
+    <p>
+      Osiris is an AI assistant that works in a workspace: a folder you choose. It reads and writes the
+      files there, searches your documents, remembers facts, runs scheduled tasks and uses the tools,
+      rules and MCP servers the workspace configures in its .osiris folder.
+    </p>
+    <p>
+      It talks to any OpenAI-compatible model API with your own key. The same agent runs in this
+      desktop app, in the terminal and on a server.
+    </p>
+  </description>
+  <launchable type="desktop-id">cz.k6labs.Osiris.desktop</launchable>
+  <url type="homepage">https://github.com/k6labs-cz/Osiris</url>
+  <url type="bugtracker">https://github.com/k6labs-cz/Osiris/issues</url>
+  <url type="vcs-browser">https://github.com/k6labs-cz/Osiris</url>
+  <content_rating type="oars-1.1" />
+  <provides>
+    <binary>osiris-desktop</binary>
+    <binary>osiris</binary>
+  </provides>
+</component>

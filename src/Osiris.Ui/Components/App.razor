@@ -1,0 +1,24 @@
+@inject UiOptions Options
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="icon" href="@Assets["_content/Osiris.Ui/osiris.svg"]" type="image/svg+xml" />
+    <link rel="stylesheet" href="@Assets[Options.StylesBundle]" />
+    <link rel="stylesheet" href="@Assets["_content/Osiris.Ui/osiris.css"]" />
+    <ImportMap />
+    <title>Osiris</title>
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+</body>
+
+</html>

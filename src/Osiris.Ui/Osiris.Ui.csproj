@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!-- The web UI and HTTP API over the agent, shared by the server (Osiris.Web) and the desktop app (Osiris.Desktop). -->
+  <PropertyGroup>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Markdown for answers, sanitized. -->
+    <PackageReference Include="HtmlSanitizer" />
+    <PackageReference Include="Markdig" />
+    <PackageReference Include="k6labs.Hathor" />
+    <PackageReference Include="k6labs.Hathor.Lucide" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Osiris.Core\Osiris.Core.csproj" />
+  </ItemGroup>
+
+</Project>

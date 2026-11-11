@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Osiris
+Comment=An AI agent that works over a folder of yours
+Exec=osiris-desktop %f
+Icon=cz.k6labs.Osiris
+Terminal=false
+Categories=Office;Utility;
+Keywords=AI;agent;assistant;LLM;
+MimeType=inode/directory;
+StartupNotify=true

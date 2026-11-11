@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The server: many workspaces and users, signed in with Anubis (OpenID Connect). -->
+  <PropertyGroup>
+    <AssemblyName>osiris-server</AssemblyName>
+    <RootNamespace>Osiris.Web</RootNamespace>
+    <!-- The Blazor script (blazor.web.js): the components live in Osiris.Ui, so the SDK must be told. -->
+    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Osiris.Ui\Osiris.Ui.csproj" />
+  </ItemGroup>
+
+</Project>
