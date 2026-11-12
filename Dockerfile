@@ -9,7 +9,7 @@
 # packages) goes to /data: mount a persistent volume there. The rest of the filesystem can be read-only
 # (with a writable /tmp).
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 ARG VERSION=0.0.0-dev
 # The restore layer changes only with the projects' dependencies.
