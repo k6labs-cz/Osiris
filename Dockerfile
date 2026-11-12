@@ -26,7 +26,7 @@ RUN --mount=type=secret,id=github_packages_token,required=true \
 COPY src/ src/
 RUN dotnet publish src/Osiris.Web/Osiris.Web.csproj --configuration Release --no-restore -p:Version=${VERSION} --output /app
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:11.0
 WORKDIR /app
 COPY --from=build /app ./
 
